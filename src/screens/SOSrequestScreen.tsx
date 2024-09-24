@@ -1,6 +1,6 @@
-import { TextInput, Button } from 'react-native-paper'
+import { TextInput, Button, Text } from 'react-native-paper'
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, Alert, PermissionsAndroid, Platform, BackHandler } from 'react-native';
+import { View, StyleSheet, Alert, PermissionsAndroid, Platform, BackHandler, Animated, Easing, TouchableOpacity } from 'react-native';
 import GetLocation from 'react-native-get-location';
 import { SendDirectSms } from 'react-native-send-direct-sms';
 import {
@@ -13,8 +13,11 @@ import { EMERGENCY_PHONE_NUMBER } from '@env';
 import auth from '@react-native-firebase/auth'
 
 const SOSRequestScreen: React.FC = () => {
-  const [permissionGranter, setPermissionGranter] = useState(false)
-  const [locaton, setLocation] = useState<any>(null)
+  const [permissionGranted, setPermissionGranted] = useState(false);
+  const [location, setLocation] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [animation] = useState(new Animated.Value(0));
+  const [radarAnimations] = useState([...Array(3)].map(() => new Animated.Value(0)));
 
   useEffect(() => {
     const backAction = () => {
@@ -24,8 +27,45 @@ const SOSRequestScreen: React.FC = () => {
 
     const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
 
+    requestPermissions();
+    startPulseAnimation();
+    startRadarAnimation();
+
     return () => backHandler.remove();
   }, []);
+
+  const startPulseAnimation = () => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(animation, {
+          toValue: 1,
+          duration: 1000,
+          easing: Easing.ease,
+          useNativeDriver: true,
+        }),
+        Animated.timing(animation, {
+          toValue: 0,
+          duration: 1000,
+          easing: Easing.ease,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+  };
+
+  const startRadarAnimation = () => {
+    const animations = radarAnimations.map((anim, index) =>
+      Animated.timing(anim, {
+        toValue: 1,
+        duration: 2000,
+        easing: Easing.ease,
+        delay: index * 666,
+        useNativeDriver: true,
+      })
+    );
+
+    Animated.loop(Animated.stagger(666, animations)).start();
+  };
 
   async function requestPermissions() {
     try {
@@ -53,7 +93,7 @@ const SOSRequestScreen: React.FC = () => {
 
         if (locationGranted === PermissionsAndroid.RESULTS.GRANTED && smsGranted === PermissionsAndroid.RESULTS.GRANTED) {
           console.log('Permissions granted');
-          setPermissionGranter(true);
+          setPermissionGranted(true);
         } else {
           console.log('Permissions denied');
         }
@@ -64,6 +104,7 @@ const SOSRequestScreen: React.FC = () => {
   }
 
   function _getCurrentLocation() {
+    setIsLoading(true);
     GetLocation.getCurrentPosition({
       enableHighAccuracy: true,
       timeout: 30000,
@@ -75,15 +116,16 @@ const SOSRequestScreen: React.FC = () => {
       .catch(error => {
         const { code, message } = error;
         console.warn(code, message);
-      });
+      })
+      .finally(() => setIsLoading(false));
   }
 
   function _sendSOSMessage(location: any) {
     const currentUser = auth().currentUser
 
-    if (!currentUser || !currentUser.email){
+    if (!currentUser || !currentUser.email) {
       console.error('email unavailable')
-      Alert.alert('Error', 'Unable to retrive user email')
+      Alert.alert('Error', 'Unable to retrieve user email')
       return
     }
     const messageData = {
@@ -101,7 +143,6 @@ const SOSRequestScreen: React.FC = () => {
     const phoneNumber = EMERGENCY_PHONE_NUMBER;
     console.log(phoneNumber)
 
-
     if (!phoneNumber) {
       console.error('Emergency phone number is not set in the environment variables.');
       Alert.alert('Error', 'Emergency contact number is not configured.');
@@ -113,46 +154,119 @@ const SOSRequestScreen: React.FC = () => {
       .catch(err => console.log("failed to send", err));
   }
 
-  if (!permissionGranter)
-    return (
-      <View style={styles.container}>
-        <Button mode='contained' onPress={_getCurrentLocation} style={styles.button} labelStyle={styles.label} >SOS</Button>
+  const handleSOSPress = () => {
+    if (!permissionGranted) {
+      Alert.alert(
+        'Permissions Required',
+        'Location and SMS permissions are required to use the SOS feature.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Grant Permissions', onPress: requestPermissions },
+        ]
+      );
+    } else {
+      _getCurrentLocation();
+    }
+  };
+
+  const animatedStyle = {
+    transform: [
+      {
+        scale: animation.interpolate({
+          inputRange: [0, 1],
+          outputRange: [1, 1.1],
+        }),
+      },
+    ],
+  };
+
+  return (
+    <View style={styles.container}>
+      <View style={styles.buttonContainer}>
+        {radarAnimations.map((anim, index) => (
+          <Animated.View
+            key={index}
+            style={[
+              styles.radarCircle,
+              {
+                transform: [
+                  {
+                    scale: anim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [1, 4],
+                    }),
+                  },
+                ],
+                opacity: anim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0.4, 0],
+                }),
+              },
+            ]}
+          />
+        ))}
+        <Animated.View style={[styles.buttonWrapper, animatedStyle]}>
+          <TouchableOpacity
+            onPress={handleSOSPress}
+            style={styles.button}
+            disabled={isLoading}
+          >
+            <Text style={styles.buttonText}>
+              {isLoading ? 'Sending' : 'SOS'}
+            </Text>
+          </TouchableOpacity>
+        </Animated.View>
       </View>
-    );
+    </View>
+  );
 };
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    flex: 1,
+    backgroundColor: '#F0F4F8',
+  },
+  buttonContainer: {
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: rw(70),
+    height: rw(70),
+  },
+  buttonWrapper: {
+    borderRadius: rw(35),
+    padding: rw(3),
+    backgroundColor: 'rgba(232, 33, 103, 0.1)',
   },
   button: {
-    backgroundColor: '#FF0000',
-    borderRadius: rw(40),
-    width: rw(80), 
-    height: rw(80),
+    backgroundColor: '#E82167',
+    borderRadius: rw(32),
+    width: rw(64),
+    height: rw(64),
     justifyContent: 'center',
     alignItems: 'center',
-    elevation: 8,
+    elevation: 6,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.27,
+    shadowRadius: 4.65,
   },
-  content: {
-    height: '100%',
-  },
-  label: {
-    width: rw(50),
-    height: rw(50),
-    fontSize: rf(8),
+  buttonText: {
+    fontSize: rf(3.5),
     fontWeight: 'bold',
+    color: '#FFFFFF',
     textAlign: 'center',
-    textAlignVertical: 'center',
-    paddingTop: '18%'
+  },
+  radarCircle: {
+    position: 'absolute',
+    width: rw(64),
+    height: rw(64),
+    borderRadius: rw(32),
+    borderWidth: 2,
+    borderColor: 'rgba(232, 33, 103, 0.5)',
   },
 });
-
 
 export default SOSRequestScreen;

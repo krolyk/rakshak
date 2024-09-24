@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { View, Alert, StyleSheet } from 'react-native';
-import { TextInput, Button } from 'react-native-paper'
+import { View, StyleSheet, ScrollView } from 'react-native';
+import { TextInput, Button, Text } from 'react-native-paper';
 import auth, { FirebaseAuthTypes } from '@react-native-firebase/auth';
-import firestore from '@react-native-firebase/firestore'
+import firestore from '@react-native-firebase/firestore';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { PhoneNumberInput, getCountryByCode } from 'react-native-paper-phone-number-input';
 import { Picker } from '@react-native-picker/picker';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface User {
   email: string;
@@ -19,6 +19,7 @@ interface AuthScreenProps {
 }
 
 const includeCountries = ['AZ', 'BD', 'CA', 'GB', 'IN', 'NZ', 'US', 'TR'];
+
 const AuthScreen: React.FC<AuthScreenProps> = ({ navigation }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -28,18 +29,18 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ navigation }) => {
   const [emergencyContacts, setEmergencyContacts] = useState<{ countryCode: string; phoneNumber: string }[]>([
     { countryCode: 'IN', phoneNumber: '' }
   ]);
-  const [error, setError] = useState('')
+  const [error, setError] = useState('');
 
   const handleSubmit = async () => {
     setError('');
 
     try {
       if (isSignUp) {
-        //Create user account
+        // Create user account
         const userCredential = await auth().createUserWithEmailAndPassword(email, password);
         const user = userCredential.user;
 
-        //user data
+        // User data
         const userData: User = {
           email,
           name: userName,
@@ -51,8 +52,8 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ navigation }) => {
         // Storing user data in Firestore
         await firestore().collection('users').doc(user.uid).set(userData);
 
-        //Storing the user token
-        await AsyncStorage.setItem('userToken', user.uid)
+        // Storing the user token
+        await AsyncStorage.setItem('userToken', user.uid);
 
         console.log('User account created & signed in!');
       } else {
@@ -65,15 +66,13 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ navigation }) => {
         if (userDoc.exists) {
           const userData = userDoc.data();
           console.log('User logged in:', userData);
-          await AsyncStorage.setItem('isLoggedIn', 'true')
-          console.log(AsyncStorage.setItem)
-
-          // Navigate to the next screen after successful login
+          await AsyncStorage.setItem('isLoggedIn', 'true');
+          console.log(AsyncStorage.setItem);
         } else {
           setError('User data not found. Please try again.');
         }
       }
-      navigation.navigate('SOSRequest')
+      navigation.navigate('SOSRequest');
     } catch (error) {
       if (error instanceof Error) {
         setError(error.message);
@@ -95,9 +94,14 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ navigation }) => {
       console.error(error);
     }
   };
-
   const addEmergencyContact = () => {
-    setEmergencyContacts([...emergencyContacts, { countryCode: 'IN', phoneNumber: '' }]);
+    if (emergencyContacts.length < 3) {
+      setEmergencyContacts([...emergencyContacts, { countryCode: 'IN', phoneNumber: '' }]);
+    }
+  };
+
+  const removeEmergencyContact = (index: number) => {
+    setEmergencyContacts(prevContacts => prevContacts.filter((_, i) => i !== index));
   };
 
   const updateEmergencyContact = (index: number, field: 'phoneNumber' | 'countryCode') =>
@@ -113,22 +117,27 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ navigation }) => {
     };
 
   return (
-    <View style={styles.container}>
+    <ScrollView contentContainerStyle={styles.container}>
+      <Text style={styles.title}>{isSignUp ? 'Sign Up' : 'Log In'}</Text>
+
       {isSignUp && (
         <>
           <TextInput
-            placeholder="Name"
+            label="Name"
             value={userName}
             onChangeText={setUserName}
             style={styles.input}
+            mode="outlined"
+            theme={{ colors: { primary: '#a167a5ff' } }}
           />
+
           <View style={styles.pickerContainer}>
             <Picker
               selectedValue={bloodGroup}
               onValueChange={(itemValue) => setBloodGroup(itemValue)}
               style={styles.picker}
             >
-              <Picker.Item label="Select Blood Group" value="" />
+              <Picker.Item label="Select Blood Group" value="" color='#4a306dff' />
               {['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map((group) => (
                 <Picker.Item key={group} label={group} value={group} />
               ))}
@@ -138,74 +147,147 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ navigation }) => {
       )}
 
       <TextInput
-        placeholder="Email"
+        label="Email"
         value={email}
         onChangeText={setEmail}
         style={styles.input}
+        mode="outlined"
+        theme={{ colors: { primary: '#a167a5ff' } }}
       />
 
       <TextInput
-        placeholder="Password"
+        label="Password"
         value={password}
         onChangeText={setPassword}
         secureTextEntry
         style={styles.input}
+        mode="outlined"
+        theme={{ colors: { primary: '#a167a5ff' } }}
       />
 
-      {isSignUp &&
-        emergencyContacts.map((contact, index) => (
-          <View key={index} style={styles.phoneInput}>
-            <PhoneNumberInput
-              code={contact.countryCode}
-              setCode={updateEmergencyContact(index, 'countryCode')} phoneNumber={contact.phoneNumber || ''}
-              setPhoneNumber={updateEmergencyContact(index, 'phoneNumber')}
-              includeCountries={includeCountries}
-              label={'Emergency contact'}
-            />
-          </View>
-        ))}
-
       {isSignUp && (
-        <Button onPress={addEmergencyContact} style={styles.button}>
-          Add Emergency Contact
-        </Button>
+        <>
+          <Text style={styles.sectionTitle}>Emergency Contacts</Text>
+          {emergencyContacts.map((contact, index) => (
+            <View key={index} style={styles.phoneInputContainer}>
+              <View style={styles.phoneInput}>
+                <PhoneNumberInput
+                  code={contact.countryCode}
+                  setCode={updateEmergencyContact(index, 'countryCode')}
+                  phoneNumber={contact.phoneNumber || ''}
+                  setPhoneNumber={updateEmergencyContact(index, 'phoneNumber')}
+                  includeCountries={includeCountries}
+                  label={`Emergency contact ${index + 1}`}
+                />
+              </View>
+              {index > 0 && (
+                <Text style={styles.removeButton} onPress={() => removeEmergencyContact(index)}>
+                  ➖
+                </Text>
+              )}
+            </View>
+          ))}
+          {emergencyContacts.length < 3 && (
+            <Button
+              onPress={addEmergencyContact}
+              style={styles.addButton}
+              mode="outlined"
+              theme={{ colors: { primary: '#a167a5ff' } }}
+            >
+              ➕ Add another
+            </Button>
+          )}
+        </>
       )}
 
-      <Button onPress={handleSubmit} style={styles.button}>{isSignUp ? "Register" : "Log In"}</Button>
+      <Button
+        onPress={handleSubmit}
+        style={styles.submitButton}
+        mode="contained"
+        theme={{ colors: { primary: '#a167a5ff' } }}
+      >
+        {isSignUp ? "Register" : "Log In"}
+      </Button>
 
-      <Button onPress={() => setIsSignUp(!isSignUp)} style={styles.button}>{`Switch to ${isSignUp ? "Log In" : "Register"}`}</Button>
-    </View>
+      <Button
+        onPress={() => setIsSignUp(!isSignUp)}
+        style={styles.switchButton}
+        mode="text"
+        theme={{ colors: { primary: '#a167a5ff' } }}
+      >
+        {`Switch to ${isSignUp ? "Log In" : "Register"}`}
+      </Button>
+
+      {error !== '' && <Text style={styles.errorText}>{error}</Text>}
+    </ScrollView>
   );
-
 }
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
+    flexGrow: 1,
     justifyContent: 'center',
     padding: 20,
+    backgroundColor: '#e8d7f1ff',
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 20,
+    textAlign: 'center',
+    color: '#4a306dff',
   },
   input: {
-    marginBottom: 10,
-    borderWidth: 1,
-    padding: 10,
+    marginBottom: 15,
+    backgroundColor: '#ffffff',
+  },
+  phoneInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 15,
+    justifyContent: 'space-between',
   },
   phoneInput: {
-    marginBottom: 10,
+    flexGrow: 1,  // Allow it to take as much space as possible
+    minWidth: 200, // Minimum width to prevent shrinking too much
+    backgroundColor: '#ffffff', // Maintain consistent background
+    paddingHorizontal: 10,
   },
   pickerContainer: {
     borderWidth: 1,
     borderRadius: 5,
-    backgroundColor: '#000000',
-    borderColor: '#ccc',
-    marginBottom: 10,
+    borderColor: '#a167a5ff',
+    marginBottom: 15,
+    backgroundColor: '#ffffff',
   },
   picker: {
     height: 50,
     width: '100%',
   },
-  button: {
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
     marginTop: 10,
+    marginBottom: 10,
+    color: '#4a306dff',
+  },
+  removeButton: {
+    marginLeft: 10,
+    fontSize: 24,
+  },
+  addButton: {
+    marginBottom: 15,
+  },
+  submitButton: {
+    marginTop: 10,
+  },
+  switchButton: {
+    marginTop: 10,
+  },
+  errorText: {
+    color: 'red',
+    marginTop: 10,
+    textAlign: 'center',
   },
 });
 
