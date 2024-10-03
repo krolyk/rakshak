@@ -1,3 +1,6 @@
+Setup a .env file with a number to receive inbound messages. 
+>EMERGENCY_PHONE_NUMBER=+91XXXXXXXXXX
+
 This is a new [**React Native**](https://reactnative.dev) project, bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
 
 # Getting Started
@@ -11,6 +14,9 @@ First, you will need to start **Metro**, the JavaScript _bundler_ that ships _wi
 To start Metro, run the following command from the _root_ of your React Native project:
 
 ```bash
+# install node modules
+npm install
+ 
 # using npm
 npm start
 
