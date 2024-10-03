@@ -137,7 +137,7 @@ const SOSRequestScreen: React.FC = () => {
     const jsonString = JSON.stringify(messageData);
     const base64Message = Buffer.from(jsonString).toString('base64');
 
-    const formattedMessage = `Rakshak\n${base64Message}`
+    const formattedMessage = `Rakshak\nhttps://www.google.com/maps/place/${location.latitude}+${location.longitude}`
     console.log(formattedMessage)
 
     const phoneNumber = EMERGENCY_PHONE_NUMBER;
